@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_sparkline/flutter_sparkline.dart';
 
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:async';
+
+import 'package:shared_preferences/shared_preferences.dart';
 
 
 void main() => runApp(BitcoinApp());
@@ -31,21 +35,31 @@ class BitcoinPrice extends StatefulWidget {
 
 class _BitcoinPriceState extends State<BitcoinPrice> {
 
-  List<double> prices = [];
+  List<double> prices = [10000,];
+  int counter = 0;
+  final Duration interval = Duration(seconds: 30);
+  final int chartLength = 100;
 
   @override
   void initState() {
     super.initState();
+    Timer.periodic(interval, (timer) {
+      addCurrentPrice();
+    });
   }
 
   void addCurrentPrice() async {
     var response = await http.get(Uri.encodeFull('https://blockchain.info/ticker'));
     var data = json.decode(response.body);
-    print(data['USD']['last']);
-    
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(counter.toString(), data['USD']['last']);
+    counter++;
+
     setState(() {
       prices.add(data['USD']['last']);
     });
+    print(data['USD']['last']);
   }
 
 
@@ -53,12 +67,28 @@ class _BitcoinPriceState extends State<BitcoinPrice> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Bitcoin'),
+        title: Text('Bitcoin Price'),
       ),
-      body: _priceList(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: addCurrentPrice,
-        child: Icon(Icons.attach_money),
+      body: _getChart(),
+      // floatingActionButton: FloatingActionButton(
+      //   onPressed: addCurrentPrice,
+      //   child: Icon(Icons.attach_money),
+      // ),
+      bottomSheet: ListTile(
+        leading: Icon(
+          Icons.attach_money,
+          color: Colors.pink.shade500,
+          size: 32.0,
+        ),
+        title: Text(
+          prices[prices.length-1].toString(),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 32.0,
+            color: Colors.pink.shade500,
+          ),
+        )
       ),
     );
   }
@@ -69,9 +99,24 @@ class _BitcoinPriceState extends State<BitcoinPrice> {
       itemBuilder: (context, i) {
         if (i >= prices.length) return null;
         return ListTile(
-          title: Text(prices[abs(i - (prices.length - 1))].toString())
-          ,);
+          title: Text(prices[abs(i - (prices.length - 1))].toString()),
+          );
       },
+    );
+  }
+
+  Widget _getChart() {
+    List<double> data = [];
+    if (prices.length <= chartLength) {
+      data = prices;
+    }
+    else {
+      data = prices.sublist(prices.length - chartLength);
+    }
+    return new Container(
+      height: 300.0,
+      padding: new EdgeInsets.all(30.0),
+      child: new Sparkline(data: data),
     );
   }
 
